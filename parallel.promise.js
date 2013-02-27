@@ -31,21 +31,21 @@
 			});
 		};
 		worker.onerror=rejectPromises;
-	w.data=function(data){
-		var i = promises.length;
-		promises[i] = new RSVP.Promise();
-		worker.onmessage=function(e){
-			promises[e.data[0]].resolve(e.data[1]);
-			promises[e.data[0]]=0;
+		w.data=function(data){
+			var i = promises.length;
+			promises[i] = new RSVP.Promise();
+			worker.onmessage=function(e){
+				promises[e.data[0]].resolve(e.data[1]);
+				promises[e.data[0]]=0;
+			};
+			worker.postMessage([i,data]);
+			return promises[i];
 		};
-		worker.postMessage([i,data]);
-		return promises[i];
-	};
-	w.close = function(){
-		w.worker.terminate();
-		rejectPromises("closed");
-		return;
-	};
-	return w;
+		w.close = function(){
+			w.worker.terminate();
+			rejectPromises("closed");
+			return;
+		};
+		return w;
 	};
 })();
