@@ -27,10 +27,14 @@ var Parallel = (function  () {
         };
 
         var setter = function () {
-            var args = _.toArray(arguments);
+            var args = [];
+            var i = 0,len = arguments.length;
+            while(i<len){
+                args.push(arguments[i]);
+            }
 
-            state.funcs = _.filter(args, _.isFunction);
-            state.files = _.chain(args).filter(_.isString).map(makeUrl).value();
+            state.funcs = args.filter(function(v){return typeof v === "function";});
+            state.files = args.filter(function(v){return typeof v === "string";}).map(makeUrl);
         };
 
         setter.state = state;
@@ -49,15 +53,17 @@ var Parallel = (function  () {
 
         var wrapFiles = function (str) {
             return isNode ?
-                (_require.state.files.length ? _.map(_require.state.files, function (f) { return 'require(' + f + ');'; }).join('') : '') + str :
+                (_require.state.files.length ? _require.state.files.map(function (f) { return 'require(' + f + ');'; }).join('') : '') + str :
                 (_require.state.files.length ? 'importScripts("' + _require.state.files.join('","') + '");' : '') + str;
         };
 
         var wrapFunctions = function (str) {
-            return str + (_require.state.funcs.length ? _.invoke(_require.state.funcs, 'toString').join(';') + ';' : '');
+            return str + (_require.state.funcs.length ? _require.state.funcs.map(function(v){return v.toString()}).join(';') + ';' : '');
         };
 
-        var wrap = _.compose(wrapFunctions, wrapFiles, wrapMain);
+        var wrap =function(v){
+            return wrapFunctions(wrapFiles(wrapMain(v)));
+            };
 
         var RemoteRef = function (fn, args) {
             this.handlers = [];
@@ -69,8 +75,7 @@ var Parallel = (function  () {
                     url = URL.createObjectURL(blob),
                     worker = new Worker(url);
     
-                worker.onmessage = _.bind(this.onWorkerMsg, this);
-    
+                worker.onmessage = this.onWorkerMsg.bind(this);
                 this.worker = worker;
                 this.worker.ref = this;
                 
@@ -141,8 +146,8 @@ var Parallel = (function  () {
             this.errorHandlers = [];
             this.values = [];
 
-            this.refs = _.map(chunks, function (chunk) {
-                return spawn(fn, [].concat(chunk)).then(_.bind(this.resolve, this));
+            this.refs = chunks.map(function (chunk) {
+                return spawn(fn, [].concat(chunk)).then(this.resolve(this));
             }, this);
 
             this.workers = this.refs.length;
@@ -181,7 +186,7 @@ var Parallel = (function  () {
         };
 
         DistributedProcess.prototype.terminate = function (n) {
-            n !== undefined ? this.refs[n].terminate() : _.invoke(this.refs, 'terminate');
+            n !== undefined ? this.refs[n].terminate() : this.refs.forEach(function(v){v.terminate()});
         };
 
         return DistributedProcess;
@@ -215,13 +220,13 @@ var Parallel = (function  () {
 
             if (this._mapreduce) {
                 this._mapreduce.then(function (values) {
-                    that._wrapped = _.reduce(values, fn);
+                    that._wrapped = values.reduce(fn);
                 });
 
                 return this;
             }
 
-            return _.reduce(this._wrapped, fn);
+            return this._wrapped.reduce(fn);
         };
 
         var then = P.then = function (fn) {
@@ -237,7 +242,7 @@ var Parallel = (function  () {
         P.require = _require;
     
         P.mixin = function (obj) {
-            _.each(_.functions(obj), function (name) {
+            Object.keys(obj).filter(function(k){return typeof obj[k] === "funciton"}).forEach(function (name) {
                 var func = P[name] = obj[name];
     
                 P.prototype[name] = function () {
