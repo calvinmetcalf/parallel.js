@@ -276,11 +276,11 @@
 			}
 			return w;
 		}
-		w.fetch=function(){
+		w.fetch=function(now){
 			if(!promise){
 			promise = new RSVP.Promise();
 		}
-			if(data.length){
+			if(data.length && !now){
 				waiting=true;
 			}else{
 				reducer.fetch();
@@ -306,19 +306,21 @@
 		}
 		return w;
 	};
-	window.parallel=function(a,b){
-		if(typeof a === "function"){
+	var p=function(a,b){
+		if(typeof a === "function" && typeof b === "function"){
+			return mWorker(a,b);
+		}else if(typeof a === "function" || typeof a === "string"){
 			return b ? fAndF(a,b):sticksAround(a);
 		}else if(typeof a === "number"){
 			return b ? incrementalMapReduce(a):nonIncrementalMapReduce(a);
 		}
 	};
-	window.parallel.ajax = function(url,after,notjson){
-		var makeUrl = function (fileName) {
+	p.makeUrl = function (fileName) {
 		var link = document.createElement("link");
 		link.href = fileName;
 		return link.href;
-         };
+	};
+	p.ajax = function(url,after,notjson){
 		var resp = after?"("+after.toString()+")(request.responseText)":"request.responseText";
 		var func = 'function (url, cb) {\
 			var request = new XMLHttpRequest();\
@@ -330,6 +332,8 @@
 				};\
 			request.send();\
 		}';
-		return window.parallel(eval("("+func+")"),makeUrl(url));
+		return window.parallel(func,p.makeUrl(url));
 	};
+	p.reducer = rWorker;
+	window.parallel=p;
 })();
