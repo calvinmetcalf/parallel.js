@@ -33,8 +33,8 @@ var Parallel = (function  () {
                 args.push(arguments[i]);
             }
 
-            state.funcs = args.filter(function(v){return typeof v === "function";});
-            state.files = args.filter(function(v){return typeof v === "string";}).map(makeUrl);
+            state.funcs = args.filter(function (v) {return typeof v === "function";});
+            state.files = args.filter(function (v) {return typeof v === "string";}).map(makeUrl);
         };
 
         setter.state = state;
@@ -58,10 +58,10 @@ var Parallel = (function  () {
         };
 
         var wrapFunctions = function (str) {
-            return str + (_require.state.funcs.length ? _require.state.funcs.map(function(v){return v.toString()}).join(';') + ';' : '');
+            return str + (_require.state.funcs.length ? _require.state.funcs.map(function (v) {return v.toString()}).join(';') + ';' : '');
         };
 
-        var wrap =function(v){
+        var wrap = function (v) {
             return wrapFunctions(wrapFiles(wrapMain(v)));
             };
 
@@ -80,9 +80,9 @@ var Parallel = (function  () {
                 this.worker.ref = this;
                 
                 if (isNode) {
-                    this.worker.postMessage(JSON.stringify([].concat(args)));
+                    this.worker.postMessage(JSON.stringify(args.slice()));
                 } else {
-                    this.worker.postMessage([].concat(args));
+                    this.worker.postMessage(args.slice());
                 }
             } catch (e) {
                 if (console && console.error) {
@@ -91,7 +91,7 @@ var Parallel = (function  () {
 
                 this.onWorkerMsg({ data: fn.apply(window, args) });
             }
-        }
+        };
 
         RemoteRef.prototype.onWorkerMsg = function (e) {
             var data;
@@ -133,7 +133,7 @@ var Parallel = (function  () {
 
             this.handlers.shift();
 
-            return this.reject(this.errorHandlers.shift()(value));
+            return this.reject(this.errorHandlers.shift()(error));
         };
 
         return RemoteRef;
@@ -147,7 +147,7 @@ var Parallel = (function  () {
             this.values = [];
 
             this.refs = chunks.map(function (chunk) {
-                return spawn(fn, [].concat(chunk)).then(this.resolve(this));
+                return spawn(fn, chunk.slice()).then(this.resolve(this));
             }, this);
 
             this.workers = this.refs.length;
@@ -186,7 +186,9 @@ var Parallel = (function  () {
         };
 
         DistributedProcess.prototype.terminate = function (n) {
-            n !== undefined ? this.refs[n].terminate() : this.refs.forEach(function(v){v.terminate()});
+            n !== undefined ? this.refs[n].terminate() : this.refs.forEach(function (v) {
+                v.terminate();
+            });
         };
 
         return DistributedProcess;
@@ -242,7 +244,7 @@ var Parallel = (function  () {
         P.require = _require;
     
         P.mixin = function (obj) {
-            Object.keys(obj).filter(function(k){return typeof obj[k] === "funciton"}).forEach(function (name) {
+            Object.keys(obj).filter(function (k) {return typeof obj[k] === "funciton"}).forEach(function (name) {
                 var func = P[name] = obj[name];
     
                 P.prototype[name] = function () {
