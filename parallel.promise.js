@@ -180,4 +180,108 @@
 		}
 		return w;
 	};
+	var incrementalMapReduce = function(threads){
+		var w={};
+		var data=[];
+		var len = 0;
+		var promise = new RSVP.Promise();
+		var workers = [];
+		var idle = threads;
+		var reducer;
+		var waiting=false;
+		var closing=false;
+		var status = {
+			map:false,
+			reduce:false,
+			data:false
+		};
+		var checkStatus = function(){
+			if(status.map && status.reduce && status.data){
+				return go();
+			}else{
+				return w;
+			}
+		};
+		w.map=function(fun){
+			if(status.map){
+				return w;
+			}
+			var i = 0;
+			while(i<threads){
+				(function(){
+					var mw = mWorker(fun, function(d){
+						reducer.data(d);
+						if(len>0){
+							len--;
+							mw.data(data.pop());
+						}else{ 
+							idle++;
+							if(idle===threads){
+								data=false;
+								if(closing){
+								closeUp();
+								}else if(waiting){
+									reducer.fetch();
+								}
+							}
+						}
+					});
+				workers.push(fun,mw);
+				})();
+				i++;
+			}
+			status.map=true;
+			return checkStatus();
+		};
+		w.reduce=function(fun){
+			if(status.reduce){
+				return w;
+			}
+			reducer = rWorker(fun,function(d){
+				promise.resolve(d);
+			});
+			status.reduce=true;
+			return checkStatus();
+		};
+		w.data = function(d){
+			len = len + d.length;
+			data = data.concat(d);
+			status.data=true;
+			return checkStatus();
+		};
+		function go(){
+			var i = 0;
+			var wlen = workers.length;
+			while(i<wlen && len>0 && !idle){
+				len--;
+				workers[i].data(data.pop());
+				i++;
+				idle--;
+			}
+			return w;
+		}
+		w.fetch=function(){
+			if(data){
+				waiting=true;
+			}else{
+				reducer.fetch();
+			}
+			return promise;
+		};
+		w.close=function(){
+			if(data){
+				closing=true;
+			}else{
+				closeUp();
+			}
+			return promise;
+		};
+		function closeUp(){
+			reducer.close();
+			workers.forEach(function(v){
+				v.close();	
+			});
+		}
+		return w;
+	};
 })();
