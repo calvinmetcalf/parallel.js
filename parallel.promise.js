@@ -23,7 +23,7 @@
 		var promises = [];
 		var worker = makeWorker(['var fun=', fun,';\
 					self.onmessage=function(event){\
-						self.postMessage([event.data[0],funcevent.data[1])]);\
+						self.postMessage([event.data[0],fun(event.data[1])]);\
 					}']);
 		var rejectPromises = function(msg){
 			promises.forEach(function(p){
@@ -69,7 +69,7 @@
 	};
 	var rWorker = function(fun,callback){
 		var w = {};
-		var worker = makeWorker('var fun = ',fun,',reduced,reduceEmpty=true;\
+		var worker = makeWorker(['var fun = ',fun,',reduced,reduceEmpty=true;\
 		self.onmessage=function(event){\
 			switch(event.data[0]){\
 				case "data":\
@@ -77,7 +77,7 @@
 						reduced = event.data[1];\
 						reduceEmpty = false;\
 					}else{\
-						reduced = func(reduced,event.data[1]);\
+						reduced = fun(reduced,event.data[1]);\
 					}\
 					break;\
 				case "get":\
@@ -88,7 +88,7 @@
 					self.close();\
 					break;\
 			}\
-		};');
+		};']);
 		worker.onmessage=function(e){
 			callback(e.data);	
 		};
@@ -104,15 +104,15 @@
 			}
 			worker.postMessage(["close"]);
 		};
+		return w;
 	};
 	var nonIncrementalMapReduce = function(threads){
-		var w={};
 		var data=[];
 		var len = 0;
-		var promise = new RSVP.Promise();
+		var reducer;
+		var w = new RSVP.Promise();
 		var workers = [];
 		var terminated = 0;
-		var reducer;
 		var status = {
 			map:false,
 			reduce:false,
@@ -145,7 +145,7 @@
 							}
 						}
 					});
-				workers.push(fun,mw);
+				workers.push(mw);
 				})();
 				i++;
 			}
@@ -157,7 +157,7 @@
 				return w;
 			}
 			reducer = rWorker(fun,function(d){
-				promise.resolve(d);
+				w.resolve(d);
 			});
 			status.reduce=true;
 			return checkStatus();
@@ -176,16 +176,16 @@
 				workers[i].data(data.pop());
 				i++;
 			}
-			return promise;
+			return w;
 		}
 		return w;
 	};
 	var incrementalMapReduce = function(threads){
-		var w={};
-		var data=[];
+		var w = {};
 		var len = 0;
-		var promise = new RSVP.Promise();
+		var promise;
 		var workers = [];
+		var data=[];
 		var idle = threads;
 		var reducer;
 		var waiting=false;
@@ -217,7 +217,7 @@
 						}else{ 
 							idle++;
 							if(idle===threads){
-								data=false;
+								status.data=false;
 								if(closing){
 								closeUp();
 								}else if(waiting){
@@ -226,7 +226,7 @@
 							}
 						}
 					});
-				workers.push(fun,mw);
+				workers.push(mw);
 				})();
 				i++;
 			}
@@ -238,7 +238,10 @@
 				return w;
 			}
 			reducer = rWorker(fun,function(d){
+				if(promise){
 				promise.resolve(d);
+				promise = false;
+				};
 			});
 			status.reduce=true;
 			return checkStatus();
@@ -252,7 +255,7 @@
 		function go(){
 			var i = 0;
 			var wlen = workers.length;
-			while(i<wlen && len>0 && !idle){
+			while(i<wlen && len>0 && !idle.length){
 				len--;
 				workers[i].data(data.pop());
 				i++;
@@ -261,7 +264,10 @@
 			return w;
 		}
 		w.fetch=function(){
-			if(data){
+			if(!promise){
+			promise = new RSVP.Promise();
+		}
+			if(data.length){
 				waiting=true;
 			}else{
 				reducer.fetch();
@@ -269,7 +275,10 @@
 			return promise;
 		};
 		w.close=function(){
-			if(data){
+			if(!promise){
+			promise = new RSVP.Promise();
+		}
+			if(data.length){
 				closing=true;
 			}else{
 				closeUp();
@@ -284,11 +293,11 @@
 		}
 		return w;
 	};
-	window.promise=function(a,b){
+	window.parallel=function(a,b){
 		if(typeof a === "function"){
 			return b ? fAndF(a,b):sticksAround(a);
 		}else if(typeof a === "number"){
-			return b ? nonIncrementalMapReduce(a):incrementalMapReduce(a);
+			return b ? incrementalMapReduce(a):nonIncrementalMapReduce(a);
 		}
 	};
 })();
