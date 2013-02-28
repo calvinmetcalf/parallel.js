@@ -1,13 +1,19 @@
 (function(){
-	var makeWorker = function(strings){
-	return new Worker(URL.createObjectURL(new Blob([strings.join("")],{type: "text/javascript"})));	
+    var makeWorker = function(strings){
+    return new Worker(URL.createObjectURL(new Blob([strings.join("")],{type: "text/javascript"})));	
 	};
 	var fAndF = function(fun,data){
 		var promise = new RSVP.Promise();
 		var worker = makeWorker(['var fun = ',fun,';\
-			self.onmessage=function(){\
-				self.postMessage(fun(',JSON.stringify(data),'));\
+		function _clb(data){\
+				self.postMessage(data);\
 				self.close();\
+			}\
+			self.onmessage=function(){\
+			var _rst = fun(',JSON.stringify(data),',_clb);\
+			if(_rst){\
+				_clb(_rst);\
+			}\
 			}']);
 		worker.onmessage=function(e){
 			promise.resolve(e.data);
@@ -22,9 +28,16 @@
 		var w = {};
 		var promises = [];
 		var worker = makeWorker(['var fun=', fun,';\
-					self.onmessage=function(event){\
-						self.postMessage([event.data[0],fun(event.data[1])]);\
-					}']);
+			function _clb(num,data){\
+				self.postMessage([num,data]);\
+			}\
+			self.onmessage=function(event){\
+				var _cc = _clb.bind(self, event.data[0]);\
+				var _rst = fun(event.data[1],_cc);\
+				if(_rst){\
+					_cc(_rst)\
+				}\
+				}']);
 		var rejectPromises = function(msg){
 			promises.forEach(function(p){
 				if(p){
@@ -299,5 +312,24 @@
 		}else if(typeof a === "number"){
 			return b ? incrementalMapReduce(a):nonIncrementalMapReduce(a);
 		}
+	};
+	window.parallel.ajax = function(url,after,notjson){
+		var makeUrl = function (fileName) {
+		var link = document.createElement("link");
+		link.href = fileName;
+		return link.href;
+         };
+		var resp = after?"("+after.toString()+")(request.responseText)":"request.responseText";
+		var func = 'function (url, cb) {\
+			var request = new XMLHttpRequest();\
+			request.open("GET", url);\
+				request.onreadystatechange = function() {\
+					if (request.readyState === 4 && request.status === 200) {'+
+						(!notjson?'cb(JSON.parse('+resp+'));':'cb('+resp+');')+'\
+						}\
+				};\
+			request.send();\
+		}';
+		return window.parallel(eval("("+func+")"),makeUrl(url));
 	};
 })();
