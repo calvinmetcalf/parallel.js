@@ -284,4 +284,11 @@
 		}
 		return w;
 	};
+	window.promise=function(a,b){
+		if(typeof a === "function"){
+			return b ? fAndF(a,b):sticksAround(a);
+		}else if(typeof a === "number"){
+			return b ? nonIncrementalMapReduce(a):incrementalMapReduce(a);
+		}
+	};
 })();
